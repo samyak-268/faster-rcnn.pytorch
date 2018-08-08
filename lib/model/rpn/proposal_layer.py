@@ -19,7 +19,7 @@ from .generate_anchors import generate_anchors
 from .bbox_transform import bbox_transform_inv, clip_boxes, clip_boxes_batch
 from model.nms.nms_wrapper import nms
 
-import pdb
+import ipdb
 
 DEBUG = False
 
@@ -124,7 +124,8 @@ class _ProposalLayer(nn.Module):
         proposals_keep = proposals
         _, order = torch.sort(scores_keep, 1, True)
 
-        output = scores.new(batch_size, post_nms_topN, 5).zero_()
+        # Making space for an additional ROI that corresponds to the entire image
+        output = scores.new(batch_size, post_nms_topN+1, 5).zero_()
         for i in range(batch_size):
             # # 3. remove predicted boxes with either height or width < threshold
             # # (NOTE: convert min_size to input image scale stored in im_info[2])
@@ -156,7 +157,11 @@ class _ProposalLayer(nn.Module):
             # padding 0 at the end.
             num_proposal = proposals_single.size(0)
             output[i,:,0] = i
-            output[i,:num_proposal,1:] = proposals_single
+            output[i,1:num_proposal+1,1:] = proposals_single
+
+        # Add the ROI corresponding to the entire image as the first entry in output
+        output[0, 0, 3], output[0, 0, 4] = im_info[0][1]-1, im_info[0][0]-1
+        scores_single = torch.cat([torch.FloatTensor([[1.]]).cuda(), scores_single], 0)
 
         return output, scores_single
 
